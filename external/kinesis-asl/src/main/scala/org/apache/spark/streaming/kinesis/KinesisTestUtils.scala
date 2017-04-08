@@ -203,7 +203,7 @@ private[kinesis] object KinesisTestUtils {
 
   val envVarNameForEnablingTests = "ENABLE_KINESIS_TESTS"
   val endVarNameForEndpoint = "KINESIS_TEST_ENDPOINT_URL"
-  val defaultEndpointUrl = "https://kinesis.us-west-2.amazonaws.com"
+  val defaultEndpointUrl = "https://kinesis.us-east-1.amazonaws.com"
 
   def getRegionNameByEndpoint(endpoint: String): String = {
     val uri = new java.net.URI(endpoint)
@@ -228,7 +228,7 @@ private[kinesis] object KinesisTestUtils {
           |By default, the tests use the endpoint URL $defaultEndpointUrl to create Kinesis streams.
           |To change this endpoint URL to a different region, you can set the environment variable
           |$endVarNameForEndpoint to the desired endpoint URL
-          |(e.g. $endVarNameForEndpoint="https://kinesis.us-west-2.amazonaws.com").
+          |(e.g. $endVarNameForEndpoint="https://kinesis.us-east-1.amazonaws.com").
         """.stripMargin)
       // scalastyle:on println
     }

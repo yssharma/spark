@@ -19,19 +19,19 @@ package org.apache.spark.streaming.kinesis
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
-import scala.collection.JavaConverters._
-import scala.collection.mutable
-import scala.util.control.NonFatal
-
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.{IRecordProcessor, IRecordProcessorCheckpointer, IRecordProcessorFactory}
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.{InitialPositionInStream, KinesisClientLibConfiguration, Worker}
 import com.amazonaws.services.kinesis.model.Record
-
 import org.apache.spark.internal.Logging
 import org.apache.spark.storage.{StorageLevel, StreamBlockId}
 import org.apache.spark.streaming.Duration
 import org.apache.spark.streaming.receiver.{BlockGenerator, BlockGeneratorListener, Receiver}
 import org.apache.spark.util.Utils
+
+import scala.collection.JavaConverters._
+import scala.collection.mutable
+import scala.util.control.NonFatal
+
 
 /**
  * Custom AWS Kinesis-specific implementation of Spark Streaming's Receiver.
@@ -83,7 +83,7 @@ private[kinesis] class KinesisReceiver[T](
     val streamName: String,
     endpointUrl: String,
     regionName: String,
-    initialPositionInStream: InitialPositionInStream,
+    initialPositionInStream: KinesisInitialPositionInStream,
     checkpointAppName: String,
     checkpointInterval: Duration,
     storageLevel: StorageLevel,
@@ -148,17 +148,31 @@ private[kinesis] class KinesisReceiver[T](
 
     kinesisCheckpointer = new KinesisCheckpointer(receiver, checkpointInterval, workerId)
     val kinesisProvider = kinesisCreds.provider
-    val kinesisClientLibConfiguration = new KinesisClientLibConfiguration(
-          checkpointAppName,
-          streamName,
-          kinesisProvider,
-          dynamoDBCreds.map(_.provider).getOrElse(kinesisProvider),
-          cloudWatchCreds.map(_.provider).getOrElse(kinesisProvider),
-          workerId)
+
+    val kinesisClientLibConfiguration = {
+      var conf = new KinesisClientLibConfiguration(
+        checkpointAppName,
+        streamName,
+        kinesisProvider,
+        dynamoDBCreds.map(_.provider).getOrElse(kinesisProvider),
+        cloudWatchCreds.map(_.provider).getOrElse(kinesisProvider),
+        workerId)
         .withKinesisEndpoint(endpointUrl)
-        .withInitialPositionInStream(initialPositionInStream)
+        .withInitialPositionInStream(initialPositionInStream.position)
         .withTaskBackoffTimeMillis(500)
         .withRegionName(regionName)
+
+      /**  enhance the kinesis receiver if InitialPositionInStream.AT_TIMESTAMP is provided  */
+      if (initialPositionInStream.position.equals(InitialPositionInStream.AT_TIMESTAMP)) {
+        if (initialPositionInStream.timestamp != null) {
+          conf = conf.withTimestampAtInitialPositionInStream(initialPositionInStream.timestamp)
+        } else {
+          throw new Exception("Kinesis Initial position AT_TIMESTAMP requires timestamp")
+        }
+      }
+
+      conf
+    }
 
    /*
     *  RecordProcessorFactory creates impls of IRecordProcessor.

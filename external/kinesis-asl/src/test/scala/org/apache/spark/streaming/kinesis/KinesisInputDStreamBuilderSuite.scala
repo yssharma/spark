@@ -17,15 +17,11 @@
 
 package org.apache.spark.streaming.kinesis
 
-import java.lang.IllegalArgumentException
-
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStream
-import org.scalatest.BeforeAndAfterEach
-import org.scalatest.mock.MockitoSugar
-
-import org.apache.spark.SparkFunSuite
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.streaming.{Seconds, StreamingContext, TestSuiteBase}
+import org.scalatest.BeforeAndAfterEach
+import org.scalatest.mock.MockitoSugar
 
 class KinesisInputDStreamBuilderSuite extends TestSuiteBase with BeforeAndAfterEach
    with MockitoSugar {
@@ -72,7 +68,7 @@ class KinesisInputDStreamBuilderSuite extends TestSuiteBase with BeforeAndAfterE
     val dstream = builder.build()
     assert(dstream.endpointUrl == DEFAULT_KINESIS_ENDPOINT_URL)
     assert(dstream.regionName == DEFAULT_KINESIS_REGION_NAME)
-    assert(dstream.initialPositionInStream == DEFAULT_INITIAL_POSITION_IN_STREAM)
+    assert(dstream.initialPositionInStream.position == DEFAULT_INITIAL_POSITION_IN_STREAM)
     assert(dstream.checkpointInterval == batchDuration)
     assert(dstream._storageLevel == DEFAULT_STORAGE_LEVEL)
     assert(dstream.kinesisCreds == DefaultCredentials)
@@ -81,8 +77,8 @@ class KinesisInputDStreamBuilderSuite extends TestSuiteBase with BeforeAndAfterE
   }
 
   test("should propagate custom non-auth values to KinesisInputDStream") {
-    val customEndpointUrl = "https://kinesis.us-west-2.amazonaws.com"
-    val customRegion = "us-west-2"
+    val customEndpointUrl = "https://kinesis.us-east-1.amazonaws.com"
+    val customRegion = "us-east-1"
     val customInitialPosition = InitialPositionInStream.TRIM_HORIZON
     val customAppName = "a-very-nice-kinesis-app"
     val customCheckpointInterval = Seconds(30)
@@ -104,7 +100,7 @@ class KinesisInputDStreamBuilderSuite extends TestSuiteBase with BeforeAndAfterE
       .build()
     assert(dstream.endpointUrl == customEndpointUrl)
     assert(dstream.regionName == customRegion)
-    assert(dstream.initialPositionInStream == customInitialPosition)
+    assert(dstream.initialPositionInStream.position == customInitialPosition)
     assert(dstream.checkpointAppName == customAppName)
     assert(dstream.checkpointInterval == customCheckpointInterval)
     assert(dstream._storageLevel == customStorageLevel)

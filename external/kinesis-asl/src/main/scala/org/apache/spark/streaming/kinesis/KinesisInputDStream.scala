@@ -36,7 +36,7 @@ private[kinesis] class KinesisInputDStream[T: ClassTag](
     val streamName: String,
     val endpointUrl: String,
     val regionName: String,
-    val initialPositionInStream: InitialPositionInStream,
+    val initialPositionInStream: KinesisInitialPositionInStream,
     val checkpointAppName: String,
     val checkpointInterval: Duration,
     val _storageLevel: StorageLevel,
@@ -97,7 +97,7 @@ object KinesisInputDStream {
     // Params with defaults
     private var endpointUrl: Option[String] = None
     private var regionName: Option[String] = None
-    private var initialPositionInStream: Option[InitialPositionInStream] = None
+    private var initialPositionInStream: Option[KinesisInitialPositionInStream] = None
     private var checkpointInterval: Option[Duration] = None
     private var storageLevel: Option[StorageLevel] = None
     private var kinesisCredsProvider: Option[SparkAWSCredentials] = None
@@ -185,8 +185,21 @@ object KinesisInputDStream {
      *                        will start reading records in the Kinesis stream from
      * @return Reference to this [[KinesisInputDStream.Builder]]
      */
-    def initialPositionInStream(initialPosition: InitialPositionInStream): Builder = {
+    def initialPositionInStream(initialPosition: KinesisInitialPositionInStream): Builder = {
       initialPositionInStream = Option(initialPosition)
+      this
+    }
+
+    /**
+      * Sets the initial position data is read from in the Kinesis stream. Defaults to
+      * [[InitialPositionInStream.LATEST]] if no custom value is specified.
+      *
+      * @param initialPosition InitialPositionInStream value specifying where Spark Streaming
+      *                        will start reading records in the Kinesis stream from
+      * @return Reference to this [[KinesisInputDStream.Builder]]
+      */
+    def initialPositionInStream(initialPosition: InitialPositionInStream): Builder = {
+      initialPositionInStream = Option(new KinesisInitialPositionInStream(initialPosition))
       this
     }
 
@@ -263,7 +276,8 @@ object KinesisInputDStream {
         getRequiredParam(streamName, "streamName"),
         endpointUrl.getOrElse(DEFAULT_KINESIS_ENDPOINT_URL),
         regionName.getOrElse(DEFAULT_KINESIS_REGION_NAME),
-        initialPositionInStream.getOrElse(DEFAULT_INITIAL_POSITION_IN_STREAM),
+        initialPositionInStream
+          .getOrElse(new KinesisInitialPositionInStream(DEFAULT_INITIAL_POSITION_IN_STREAM)),
         getRequiredParam(checkpointAppName, "checkpointAppName"),
         checkpointInterval.getOrElse(ssc.graph.batchDuration),
         storageLevel.getOrElse(DEFAULT_STORAGE_LEVEL),

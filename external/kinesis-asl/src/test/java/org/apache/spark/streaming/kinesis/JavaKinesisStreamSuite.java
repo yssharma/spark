@@ -67,7 +67,7 @@ public class JavaKinesisStreamSuite extends LocalJavaStreamingContext {
   public void testCustomHandler() {
     // Tests the API, does not actually test data receiving
     JavaDStream<String> kinesisStream = KinesisUtils.createStream(ssc, "testApp", "mySparkStream",
-        "https://kinesis.us-west-2.amazonaws.com", "us-west-2", InitialPositionInStream.LATEST,
+        "https://kinesis.us-east-1.amazonaws.com", "us-east-1", InitialPositionInStream.LATEST,
         new Duration(2000), StorageLevel.MEMORY_AND_DISK_2(), handler, String.class);
 
     ssc.stop();
@@ -77,7 +77,7 @@ public class JavaKinesisStreamSuite extends LocalJavaStreamingContext {
   public void testCustomHandlerAwsCreds() {
     // Tests the API, does not actually test data receiving
     JavaDStream<String> kinesisStream = KinesisUtils.createStream(ssc, "testApp", "mySparkStream",
-        "https://kinesis.us-west-2.amazonaws.com", "us-west-2", InitialPositionInStream.LATEST,
+        "https://kinesis.us-east-1.amazonaws.com", "us-east-1", InitialPositionInStream.LATEST,
         new Duration(2000), StorageLevel.MEMORY_AND_DISK_2(), handler, String.class,
         "fakeAccessKey", "fakeSecretKey");
 
@@ -88,7 +88,7 @@ public class JavaKinesisStreamSuite extends LocalJavaStreamingContext {
   public void testCustomHandlerAwsStsCreds() {
     // Tests the API, does not actually test data receiving
     JavaDStream<String> kinesisStream = KinesisUtils.createStream(ssc, "testApp", "mySparkStream",
-        "https://kinesis.us-west-2.amazonaws.com", "us-west-2", InitialPositionInStream.LATEST,
+        "https://kinesis.us-east-1.amazonaws.com", "us-east-1", InitialPositionInStream.LATEST,
         new Duration(2000), StorageLevel.MEMORY_AND_DISK_2(), handler, String.class,
         "fakeAccessKey", "fakeSecretKey", "fakeSTSRoleArn", "fakeSTSSessionName",
         "fakeSTSExternalId");
