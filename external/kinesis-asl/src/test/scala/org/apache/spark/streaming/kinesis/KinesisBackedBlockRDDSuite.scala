@@ -22,6 +22,8 @@ import org.scalatest.BeforeAndAfterEach
 import org.apache.spark.{LocalSparkContext, SparkConf, SparkContext, SparkException}
 import org.apache.spark.storage.{BlockId, BlockManager, StorageLevel, StreamBlockId}
 
+import KinesisSequenceRangeIterator._
+
 abstract class KinesisBackedBlockRDDTests(aggregateTestData: Boolean)
   extends KinesisFunSuite with BeforeAndAfterEach with LocalSparkContext {
 
@@ -88,6 +90,36 @@ abstract class KinesisBackedBlockRDDTests(aggregateTestData: Boolean)
       testUtils.endpointUrl, fakeBlockIds(allRanges.size),
       allRanges.map { range => SequenceNumberRanges(Array(range)) }.toArray
     ).map { bytes => new String(bytes).toInt }.collect()
+    assert(receivedData2.toSet === testData.toSet)
+
+    // Verify ordering within each partition
+    val receivedData3 = new KinesisBackedBlockRDD[Array[Byte]](sc, testUtils.regionName,
+      testUtils.endpointUrl, fakeBlockIds(allRanges.size),
+      allRanges.map { range => SequenceNumberRanges(Array(range)) }.toArray
+    ).map { bytes => new String(bytes).toInt }.collectPartitions()
+    assert(receivedData3.length === allRanges.size)
+    for (i <- 0 until allRanges.size) {
+      assert(receivedData3(i).toSeq === shardIdToData(allRanges(i).shardId))
+    }
+  }
+
+  testIfEnabled("Basic reading from Kinesis with modified configurations") {
+    // Add Kinesis retry configurations
+    sc.conf.set(RETRY_WAIT_TIME_KEY, "1000ms")
+    sc.conf.set(RETRY_MAX_ATTEMPTS_KEY, "5")
+
+    // Verify all data using multiple ranges in a single RDD partition
+    val receivedData1 = new KinesisBackedBlockRDD[Array[Byte]](sc, testUtils.regionName,
+      testUtils.endpointUrl, fakeBlockIds(1),
+      Array(SequenceNumberRanges(allRanges.toArray))
+      ).map { bytes => new String(bytes).toInt }.collect()
+    assert(receivedData1.toSet === testData.toSet)
+
+    // Verify all data using one range in each of the multiple RDD partitions
+    val receivedData2 = new KinesisBackedBlockRDD[Array[Byte]](sc, testUtils.regionName,
+      testUtils.endpointUrl, fakeBlockIds(allRanges.size),
+      allRanges.map { range => SequenceNumberRanges(Array(range)) }.toArray
+      ).map { bytes => new String(bytes).toInt }.collect()
     assert(receivedData2.toSet === testData.toSet)
 
     // Verify ordering within each partition

@@ -21,13 +21,15 @@ import scala.collection.JavaConverters._
 import scala.reflect.ClassTag
 import scala.util.control.NonFatal
 
-import com.amazonaws.auth.{AWSCredentials, DefaultAWSCredentialsProviderChain}
+import com.amazonaws.auth.AWSCredentials
 import com.amazonaws.services.kinesis.AmazonKinesisClient
 import com.amazonaws.services.kinesis.clientlibrary.types.UserRecord
 import com.amazonaws.services.kinesis.model._
+import KinesisSequenceRangeIterator._
 
 import org.apache.spark._
 import org.apache.spark.internal.Logging
+import org.apache.spark.network.util.JavaUtils
 import org.apache.spark.rdd.{BlockRDD, BlockRDDPartition}
 import org.apache.spark.storage.BlockId
 import org.apache.spark.util.NextIterator
@@ -86,6 +88,8 @@ class KinesisBackedBlockRDD[T: ClassTag](
     val kinesisCreds: SparkAWSCredentials = DefaultCredentials
   ) extends BlockRDD[T](sc, _blockIds) {
 
+  private val sparkConf: SparkConf = sc.getConf
+
   require(_blockIds.length == arrayOfseqNumberRanges.length,
     "Number of blockIds is not equal to the number of sequence number ranges")
 
@@ -112,7 +116,7 @@ class KinesisBackedBlockRDD[T: ClassTag](
       val credentials = kinesisCreds.provider.getCredentials
       partition.seqNumberRanges.ranges.iterator.flatMap { range =>
         new KinesisSequenceRangeIterator(credentials, endpointUrl, regionName,
-          range, retryTimeoutMs).map(messageHandler)
+          range, retryTimeoutMs, sparkConf).map(messageHandler)
       }
     }
     if (partition.isBlockIdValid) {
@@ -135,7 +139,8 @@ class KinesisSequenceRangeIterator(
     endpointUrl: String,
     regionId: String,
     range: SequenceNumberRange,
-    retryTimeoutMs: Int) extends NextIterator[Record] with Logging {
+    retryTimeoutMs: Int,
+    sparkConf: SparkConf) extends NextIterator[Record] with Logging {
 
   private val client = new AmazonKinesisClient(credentials)
   private val streamName = range.streamName
@@ -146,6 +151,14 @@ class KinesisSequenceRangeIterator(
   private var toSeqNumberReceived = false
   private var lastSeqNumber: String = null
   private var internalIterator: Iterator[Record] = null
+
+  // variable for kinesis wait time interval between next retry
+  private val kinesisWaitTimeMs = JavaUtils.timeStringAsMs(
+    sparkConf.get(RETRY_WAIT_TIME_KEY, MIN_RETRY_WAIT_TIME_MS)
+  )
+
+  // variable for kinesis max retry attempts
+  private val kinesisMaxRetries = sparkConf.get(RETRY_MAX_ATTEMPTS_KEY, MAX_RETRIES).toInt
 
   client.setEndpoint(endpointUrl)
 
@@ -251,21 +264,19 @@ class KinesisSequenceRangeIterator(
 
   /** Helper method to retry Kinesis API request with exponential backoff and timeouts */
   private def retryOrTimeout[T](message: String)(body: => T): T = {
-    import KinesisSequenceRangeIterator._
-
-    var startTimeMs = System.currentTimeMillis()
+    val startTimeMs = System.currentTimeMillis()
     var retryCount = 0
-    var waitTimeMs = MIN_RETRY_WAIT_TIME_MS
     var result: Option[T] = None
     var lastError: Throwable = null
+    var waitTimeInterval = kinesisWaitTimeMs
 
     def isTimedOut = (System.currentTimeMillis() - startTimeMs) >= retryTimeoutMs
-    def isMaxRetryDone = retryCount >= MAX_RETRIES
+    def isMaxRetryDone = retryCount >= kinesisMaxRetries
 
     while (result.isEmpty && !isTimedOut && !isMaxRetryDone) {
       if (retryCount > 0) {  // wait only if this is a retry
-        Thread.sleep(waitTimeMs)
-        waitTimeMs *= 2  // if you have waited, then double wait time for next round
+        Thread.sleep(waitTimeInterval)
+        waitTimeInterval *= 2  // if you have waited, then double wait time for next round
       }
       try {
         result = Some(body)
@@ -295,6 +306,24 @@ class KinesisSequenceRangeIterator(
 
 private[streaming]
 object KinesisSequenceRangeIterator {
-  val MAX_RETRIES = 3
-  val MIN_RETRY_WAIT_TIME_MS = 100
+  /**
+   * The maximum number of attempts to be made to Kinesis. Defaults to 3.
+   */
+  val MAX_RETRIES = "3"
+
+  /**
+   * The interval between consequent Kinesis retries. Defaults to 100ms.
+   */
+  val MIN_RETRY_WAIT_TIME_MS = "100ms"
+
+  /**
+   * SparkConf key for configuring the wait time to use before retrying a Kinesis attempt.
+   */
+  val RETRY_WAIT_TIME_KEY = "spark.streaming.kinesis.retry.waitTime"
+
+  /**
+   * SparkConf key for configuring the maximum number of retries used when attempting a Kinesis
+   * request.
+   */
+  val RETRY_MAX_ATTEMPTS_KEY = "spark.streaming.kinesis.retry.maxAttempts"
 }

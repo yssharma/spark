@@ -216,3 +216,7 @@ de-aggregate records during consumption.
 - If no Kinesis checkpoint info exists when the input DStream starts, it will start either from the oldest record available (`InitialPositionInStream.TRIM_HORIZON`) or from the latest tip (`InitialPositionInStream.LATEST`).  This is configurable.
   - `InitialPositionInStream.LATEST` could lead to missed records if data is added to the stream while no input DStreams are running (and no checkpoint info is being stored).
   - `InitialPositionInStream.TRIM_HORIZON` may lead to duplicate processing of records where the impact is dependent on checkpoint frequency and processing idempotency.
+
+#### Kinesis retry configurations
+ - `spark.streaming.kinesis.retry.waitTime` : SparkConf for wait time between Kinesis retries (in milliseconds). Default is "100ms".
+ - `spark.streaming.kinesis.retry.maxAttempts` : SparkConf for max number of retries for Kinesis fetches. Default is 3.
