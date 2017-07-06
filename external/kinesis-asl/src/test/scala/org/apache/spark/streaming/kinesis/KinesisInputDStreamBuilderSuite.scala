@@ -17,13 +17,9 @@
 
 package org.apache.spark.streaming.kinesis
 
-import java.lang.IllegalArgumentException
-
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStream
 import org.scalatest.BeforeAndAfterEach
 import org.scalatest.mock.MockitoSugar
 
-import org.apache.spark.SparkFunSuite
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.streaming.{Seconds, StreamingContext, TestSuiteBase}
 
@@ -72,7 +68,8 @@ class KinesisInputDStreamBuilderSuite extends TestSuiteBase with BeforeAndAfterE
     val dstream = builder.build()
     assert(dstream.endpointUrl == DEFAULT_KINESIS_ENDPOINT_URL)
     assert(dstream.regionName == DEFAULT_KINESIS_REGION_NAME)
-    assert(dstream.initialPositionInStream == DEFAULT_INITIAL_POSITION_IN_STREAM)
+    assert(dstream.initialPosition.initialPositionInStream
+      == DEFAULT_INITIAL_POSITION_IN_STREAM.initialPositionInStream)
     assert(dstream.checkpointInterval == batchDuration)
     assert(dstream._storageLevel == DEFAULT_STORAGE_LEVEL)
     assert(dstream.kinesisCreds == DefaultCredentials)
@@ -83,7 +80,7 @@ class KinesisInputDStreamBuilderSuite extends TestSuiteBase with BeforeAndAfterE
   test("should propagate custom non-auth values to KinesisInputDStream") {
     val customEndpointUrl = "https://kinesis.us-west-2.amazonaws.com"
     val customRegion = "us-west-2"
-    val customInitialPosition = InitialPositionInStream.TRIM_HORIZON
+    val customInitialPosition = InitialPosition.trimHorizon
     val customAppName = "a-very-nice-kinesis-app"
     val customCheckpointInterval = Seconds(30)
     val customStorageLevel = StorageLevel.MEMORY_ONLY
@@ -94,7 +91,7 @@ class KinesisInputDStreamBuilderSuite extends TestSuiteBase with BeforeAndAfterE
     val dstream = builder
       .endpointUrl(customEndpointUrl)
       .regionName(customRegion)
-      .initialPositionInStream(customInitialPosition)
+      .initialPosition(customInitialPosition)
       .checkpointAppName(customAppName)
       .checkpointInterval(customCheckpointInterval)
       .storageLevel(customStorageLevel)
@@ -104,7 +101,8 @@ class KinesisInputDStreamBuilderSuite extends TestSuiteBase with BeforeAndAfterE
       .build()
     assert(dstream.endpointUrl == customEndpointUrl)
     assert(dstream.regionName == customRegion)
-    assert(dstream.initialPositionInStream == customInitialPosition)
+    assert(dstream.initialPosition.initialPositionInStream
+      == customInitialPosition.initialPositionInStream)
     assert(dstream.checkpointAppName == customAppName)
     assert(dstream.checkpointInterval == customCheckpointInterval)
     assert(dstream._storageLevel == customStorageLevel)

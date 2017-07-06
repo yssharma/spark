@@ -56,12 +56,13 @@ import org.apache.spark.util.Utils
  * @param endpointUrl  Url of Kinesis service (e.g., https://kinesis.us-east-1.amazonaws.com)
  * @param regionName  Region name used by the Kinesis Client Library for
  *                    DynamoDB (lease coordination and checkpointing) and CloudWatch (metrics)
- * @param initialPositionInStream  In the absence of Kinesis checkpoint info, this is the
+ * @param initialPosition  Instance of [[InitialPosition]]
+ *                                 In the absence of Kinesis checkpoint info, this is the
  *                                 worker's initial starting position in the stream.
  *                                 The values are either the beginning of the stream
  *                                 per Kinesis' limit of 24 hours
- *                                 (InitialPositionInStream.TRIM_HORIZON) or
- *                                 the tip of the stream (InitialPositionInStream.LATEST).
+ *                                 (InitialPosition.trimHorizon) or
+ *                                 the tip of the stream (InitialPosition.latest).
  * @param checkpointAppName  Kinesis application name. Kinesis Apps are mapped to Kinesis Streams
  *                 by the Kinesis Client Library.  If you change the App name or Stream name,
  *                 the KCL will throw errors.  This usually requires deleting the backing
@@ -83,7 +84,7 @@ private[kinesis] class KinesisReceiver[T](
     val streamName: String,
     endpointUrl: String,
     regionName: String,
-    initialPositionInStream: InitialPositionInStream,
+    initialPosition: InitialPosition,
     checkpointAppName: String,
     checkpointInterval: Duration,
     storageLevel: StorageLevel,
@@ -148,7 +149,7 @@ private[kinesis] class KinesisReceiver[T](
 
     kinesisCheckpointer = new KinesisCheckpointer(receiver, checkpointInterval, workerId)
     val kinesisProvider = kinesisCreds.provider
-    val kinesisClientLibConfiguration = new KinesisClientLibConfiguration(
+    var kinesisClientLibConfiguration = new KinesisClientLibConfiguration(
           checkpointAppName,
           streamName,
           kinesisProvider,
@@ -156,9 +157,19 @@ private[kinesis] class KinesisReceiver[T](
           cloudWatchCreds.map(_.provider).getOrElse(kinesisProvider),
           workerId)
         .withKinesisEndpoint(endpointUrl)
-        .withInitialPositionInStream(initialPositionInStream)
+        .withInitialPositionInStream(initialPosition.initialPositionInStream)
         .withTaskBackoffTimeMillis(500)
         .withRegionName(regionName)
+
+    // Update the Kinesis client lib config with timestamp
+    // if InitialPositionInStream.AT_TIMESTAMP is passed
+    kinesisClientLibConfiguration =
+      if (initialPosition.initialPositionInStream == InitialPositionInStream.AT_TIMESTAMP) {
+      kinesisClientLibConfiguration.withTimestampAtInitialPositionInStream(
+        initialPosition.asInstanceOf[AtTimestamp].timestamp)
+    } else {
+      kinesisClientLibConfiguration
+    }
 
    /*
     *  RecordProcessorFactory creates impls of IRecordProcessor.
